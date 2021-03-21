@@ -194,9 +194,16 @@ function reset() {
     getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getColorChannel()); 
   });
 }
+    
+function changeBank(e) {
+  const bank = (e.target.value | 0) - 1;
+  getOutput().sendControlChange(bank, 127, getSystemChannel()); 
+}
 
 document.querySelector('#copy').onclick = copyColorScheme;
 document.querySelector('#reset').onclick = reset;
+document.querySelector('#bank').onclick = changeBank;
+document.querySelector('#bank').onblur = changeBank;
   </script>
 </body>
 </html>
