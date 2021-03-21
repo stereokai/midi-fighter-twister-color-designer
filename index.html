@@ -9,36 +9,52 @@
   <meta name="author" content="Stereokai">
   <script src="https://cdn.jsdelivr.net/npm/webmidi@2.5.2/webmidi.min.js"></script>
   <link rel="shortcut icon" type="image/x-icon" href="favicon.ico">
+  <style>
+    a[target="_blank"]::after {
+      content: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAQElEQVR42qXKwQkAIAxDUUdxtO6/RBQkQZvSi8I/pL4BoGw/XPkh4XigPmsUgh0626AjRsgxHTkUThsG2T/sIlzdTsp52kSS1wAAAABJRU5ErkJggg==);
+      margin: 0 3px;
+    }  
+  </style>
 </head>
 
 <body>
-  <fieldset style="display: inline-block;">
-    <legend>MIDI Fighter Twister Color Designer</legend>
-
-    <p>
-      <label>Bank
-        <input id="bank" type="number" min="1" max="4" value="1">
-      </label>      
-      <button id="copy" style="border: 2px solid; border-radius: 3px">Copy colors to clipboard</button>
-      <button id="reset">Reset</button>
-    </p>
-
-    <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
-    <br>
+  <div style="display: inline-block; position: relative;">
     <fieldset style="display: inline-block;">
-      <legend><b>Advanced</b> - See Twister utility</legend>
-  
+      <legend>MIDI Fighter Twister Color Designer</legend>
+
       <p>
-        <input id="colorChannel" type="number" min="1" max="16" value="2" style="float: left; margin-right: 5px;">
-        <label for="colorChannel">Color MIDI Channel (default is 2,<br>setting is per knob)</label>
+        <label>Bank
+          <input id="bank" type="number" min="1" max="4" value="1">
+        </label>      
+        <button id="copy" style="border: 2px solid; border-radius: 3px">Copy colors to clipboard</button>
+        <button id="reset">Reset</button>
       </p>
-      <p>
-        <input id="systemChannel" type="number" min="1" max="16" value="4">
-        <label for="systemChannel>">System MIDI Channel (default is 4)</label>
-      </p>
+
+      <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
+      <br>
+      <fieldset style="display: inline-block;">
+        <legend><b>Advanced</b> - See Twister utility</legend>
+
+        <p>
+          <input id="colorChannel" type="number" min="1" max="16" value="2" style="float: left; margin-right: 5px;">
+          <label for="colorChannel">Color MIDI Channel (default is 2,<br>setting is per knob)</label>
+        </p>
+        <p>
+          <input id="systemChannel" type="number" min="1" max="16" value="4">
+          <label for="systemChannel>">System MIDI Channel (default is 4)</label>
+        </p>
+      </fieldset>
     </fieldset>
-  </fieldset>
-  
+    
+    <div style="position: absolute; padding: 10px;">
+      <h3>What is this?</h3>
+      This is a fun tool for designing color layouts for MIDI Fighter Twister.
+      <p>Just connect your MFT, and twist the knobs!</p>
+      <p>Once you are done creating your pretty color scheme, press the "copy colors" button. This will copy a MIDI command (aka message), that you can use to configure MFT to display your color scheme on-demand with your favorite MIDI software, for exmaple, <a href="https://www.helgoboss.org/projects/realearn/" target="_blank" title="Opens in a new tab">ReaLearn</a>.</p>
+      <p>This tool uses Web MIDI and as of 2021 is only supported on Chrome, Edge and Opera.</p>
+      <p><a href="https://github.com/stereokai/midi-fighter-twister-color-designer" target="_blank" title="Opens in a new tab">Source code</a><span style="float: right">Made by Stereokai.</span><p>
+    </div>
+  </div>
   <script>
 const MFT = "Midi Fighter Twister";
 const statusIndicator = document.querySelector('#status');
