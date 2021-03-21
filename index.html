@@ -39,7 +39,7 @@ WebMidi.enable(function(err) {
 
     const output = WebMidi.getOutputByName("Midi Fighter Twister");
     const input = WebMidi.getInputByName("Midi Fighter Twister");
-    // console.log(output.sendControlChange.toString())
+
     input.addListener('controlchange', "all",
       function(e) {
         const controller = e.controller.number;
@@ -50,9 +50,6 @@ WebMidi.enable(function(err) {
       }
     );
   }
-
-  console.log(WebMidi)
-
 });
 
 function decToHex(number) {
@@ -74,17 +71,17 @@ function getBankOffset() {
 }
 
 function getControllers() {
-  const result = controllers.map((controller, i) => {
+  const scheme = controllers.map((controller, i) => {
     if (!controller.touched) return false;
     return `${getChannel()} ${(i + getBankOffset())} ${controller.value}`
   }).filter(c => c).join(' ');
-  console.log(result)
+
   navigator.permissions.query({name: "clipboard-write"}).then(result => {
     if (result.state == "granted" || result.state == "prompt") {
-      navigator.clipboard.writeText(result);
-        window.alert('Result copied to clipboard!');
+      navigator.clipboard.writeText(scheme);
+      window.alert('Result copied to clipboard!');
     } else {
-      console.log('no permission to copy')
+      console.log('Error: no permission to copy');
     }
   }); 
 }
