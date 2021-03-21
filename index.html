@@ -11,49 +11,84 @@
 </head>
 
 <body>
-  <button id="btn">done</button>
-  <br>
+  <div>
+    <button id="btn">done</button>
+  </div>
+
   <label>channel
     <input id="channel" type="number" min="1" max="16" value="2">
   </label>
-  <br>
+
   <label>bank
     <input id="bank" type="number" min="1" max="4" value="1">
   </label>
   
+  <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
+  
   <script>
+const MFT = "Midi Fighter Twister";
 const controllers = Array.from({
   length: 16
 }, () => ({
   touched: false,
   value: undefined
 }));
-
-WebMidi.enable(function(err) {
-
+const statusIndicator = document.querySelector('#status');
+let isConnected = false;
+    
+WebMidi.enable(err => {
   if (err) {
-    console.log("WebMidi could not be enabled.", err);
+    console.log("Error: WebMidi could not be enabled.", err);
   } else {
-
-    console.log("WebMidi enabled!");
-
-    const output = WebMidi.getOutputByName("Midi Fighter Twister");
-    const input = WebMidi.getInputByName("Midi Fighter Twister");
-
-    input.addListener('controlchange', "all",
-      function(e) {
-        const controller = e.controller.number;
-        const value = e.value;
-        output.sendControlChange(controller, value, 2);
-        controllers[controller % 16].value = value;
-        controllers[controller % 16].touched = true;
+    WebMidi.addListener("connected", e => {
+      if (e && e.port && e.port.name === MFT) {
+        if (getInput()) {
+          if (isConnected) { return; }
+          
+          setConnectionStatus(true);
+          getInput().addListener('controlchange', 'all', e => {
+            if (!isConnected) { return; }
+            
+            const controller = e.controller.number;
+            const value = e.value;
+            getOutput().sendControlChange(controller, value, 2);
+            controllers[controller % 16].value = value;
+            controllers[controller % 16].touched = true;
+          });
+        }
       }
-    );
+    });
+
+    WebMidi.addListener("disconnected", e => {
+      if (e && e.port && e.port.name === MFT) {
+        setConnectionStatus(false);
+      }
+    });
   }
 });
+    
+function getInput() {
+  return WebMidi.getInputByName(MFT);
+}
 
+function getOutput() {
+  return WebMidi.getOutputByName(MFT);
+}
+    
 function decToHex(number) {
   return number.toString(16).toUpperCase().padStart(2, '0');
+}
+
+function setConnectionStatus(status) {
+  if (status) {
+    isConnected = true;
+    statusIndicator.innerText = "Connected";
+    statusIndicator.style.color = "limegreen";
+  } else {
+    isConnected = false;
+    statusIndicator.innerText = "Disconnected";
+    statusIndicator.style.color = "firebrick";
+  }
 }
 
 function getChannel() {
