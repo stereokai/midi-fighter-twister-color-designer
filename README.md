@@ -8,4 +8,4 @@ Once you are done creating your pretty color scheme, press the "copy colors" but
 
 This tool uses Web MIDI and as of 2021 works on Chrome, Edge and Opera.
 
-You can see it in action here - [MIDI Fighter Twister color designer](https://github.com/stereokai/midi-fighter-twister-color-designer "See it in action!")
+You can see it in action here - [MIDI Fighter Twister color designer](https://www.stereokai.com/midi-fighter-twister-color-designer "See it in action!")
