@@ -127,7 +127,7 @@ function getSystemChannel() {
     
 function getChannelMidi(midiChannelIndex) {
   const minMidiChannel = 175;
-  return decToHex(minMidiChannel + channel);
+  return decToHex(minMidiChannel + midiChannelIndex);
 }
 
 function setBank(bank) {
