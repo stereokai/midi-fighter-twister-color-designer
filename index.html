@@ -12,20 +12,32 @@
 </head>
 
 <body>
-  <div>
-    <button id="copy">Copy colors to clipboard</button>
-    <button id="reset">Reset</button>
-  </div>
+  <fieldset style="display: inline-block;">
+    <legend>MIDI Fighter Twister Color Designer</legend>
 
-  <label>channel
-    <input id="channel" type="number" min="1" max="16" value="2">
-  </label>
+    <p>
+      <label>Bank
+        <input id="bank" type="number" min="1" max="4" value="1">
+      </label>      
+      <button id="copy" style="border: 2px solid; border-radius: 3px">Copy colors to clipboard</button>
+      <button id="reset">Reset</button>
+    </p>
 
-  <label>bank
-    <input id="bank" type="number" min="1" max="4" value="1">
-  </label>
+    <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
+    <br>
+    <fieldset style="display: inline-block;">
+      <legend><b>Advanced</b> - See Twister utility</legend>
   
-  <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
+      <p>
+        <input id="colorChannel" type="number" min="1" max="16" value="2" style="float: left; margin-right: 5px;">
+        <label for="colorChannel">Color MIDI Channel (default is 2,<br>setting is per knob)</label>
+      </p>
+      <p>
+        <input id="systemChannel" type="number" min="1" max="16" value="4">
+        <label for="systemChannel>">System MIDI Channel (default is 4)</label>
+      </p>
+    </fieldset>
+  </fieldset>
   
   <script>
 const MFT = "Midi Fighter Twister";
@@ -37,7 +49,7 @@ WebMidi.enable(err => {
   if (err) {
     console.log("Error: WebMidi could not be enabled.", err);
   } else {
-    WebMidi.addListener("connected", e => {
+    WebMidi.addListener('connected', e => {
       if (e && e.port && e.port.name === MFT) {
         if (getInput()) {
           if (isConnected) { return; }
@@ -45,15 +57,18 @@ WebMidi.enable(err => {
           setConnectionStatus(true);
           getInput().addListener('controlchange', 'all', e => {
             if (!isConnected) { return; }
+            if (e.channel == getSystemChannel()) { return; }
             
+            // Change LED color in MFT
             const controller = e.controller.number;
             const value = e.value;
-            getOutput().sendControlChange(controller, value, getChannel());
+            getOutput().sendControlChange(controller, value, getColorChannel());
              
-            // Set bank automatically
+            // Store actual bank automatically
             const currentBank = (controller / 16 | 0) + 1; // Which bank are we on?
             setBank(currentBank);
             
+            // Store controller state
             controllers[controller % 16].value = value;
             controllers[controller % 16].touched = true;
           });
@@ -61,7 +76,7 @@ WebMidi.enable(err => {
       }
     });
 
-    WebMidi.addListener("disconnected", e => {
+    WebMidi.addListener('disconnected', e => {
       if (e && e.port && e.port.name === MFT) {
         setConnectionStatus(false);
       }
@@ -102,14 +117,17 @@ function setConnectionStatus(status) {
   }
 }
 
-function getChannel() {
-  return (document.querySelector("#channel").value | 0) || 2; // Default color channel
+function getColorChannel() {
+  return document.querySelector('#colorChannel').value | 0
+}
+
+function getSystemChannel() {
+  return document.querySelector('#systemChannel').value | 0
 }
     
-function getChannelMidi() {
+function getChannelMidi(midiChannelIndex) {
   const minMidiChannel = 175;
-  let channel = document.querySelector("#channel").value | 0;
-  return decToHex(minMidiChannel + getChannel());
+  return decToHex(minMidiChannel + channel);
 }
 
 function setBank(bank) {
@@ -122,7 +140,7 @@ function setBank(bank) {
 }
 
 function getBank() {
-  return document.querySelector("#bank").value | 0;
+  return document.querySelector('#bank').value | 0;
 }
 
 function getBankOffset() {
@@ -134,7 +152,7 @@ function getRealControllerIndex(controllerIndex) {
 }
     
 function getMidiMessage(controllerIndex, value) {
-  return `${getChannelMidi()} ${decToHex(getRealControllerIndex(controllerIndex))} ${decToHex(value)}`;
+  return `${getChannelMidi(getColorChannel())} ${decToHex(getRealControllerIndex(controllerIndex))} ${decToHex(value)}`;
 }
 
 function getColorSchemeMidi() {
@@ -173,7 +191,7 @@ function copyColorScheme() {
 function reset() {
   controllers = getFreshState();
   controllers.forEach((controller, controllerIndex) => {
-    getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getChannel()); 
+    getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getColorChannel()); 
   });
 }
 
