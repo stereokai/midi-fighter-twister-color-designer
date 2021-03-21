@@ -13,7 +13,8 @@
 
 <body>
   <div>
-    <button id="btn">done</button>
+    <button id="copy">Copy colors to clipboard</button>
+    <button id="reset">Reset</button>
   </div>
 
   <label>channel
@@ -28,13 +29,8 @@
   
   <script>
 const MFT = "Midi Fighter Twister";
-const controllers = Array.from({
-  length: 16
-}, () => ({
-  touched: false,
-  value: undefined
-}));
 const statusIndicator = document.querySelector('#status');
+let controllers = getFreshState();
 let isConnected = false;
     
 WebMidi.enable(err => {
@@ -52,7 +48,12 @@ WebMidi.enable(err => {
             
             const controller = e.controller.number;
             const value = e.value;
-            getOutput().sendControlChange(controller, value, 2);
+            getOutput().sendControlChange(controller, value, getChannel());
+             
+            // Set bank automatically
+            const currentBank = (controller / 16 | 0) + 1; // Which bank are we on?
+            setBank(currentBank);
+            
             controllers[controller % 16].value = value;
             controllers[controller % 16].touched = true;
           });
@@ -67,6 +68,15 @@ WebMidi.enable(err => {
     });
   }
 });
+    
+function getFreshState() {
+  return Array.from({
+    length: 16
+  }, () => ({
+    touched: false,
+    value: 0
+  }));
+}
     
 function getInput() {
   return WebMidi.getInputByName(MFT);
@@ -93,9 +103,22 @@ function setConnectionStatus(status) {
 }
 
 function getChannel() {
+  return (document.querySelector("#channel").value | 0) || 2; // Default color channel
+}
+    
+function getChannelMidi() {
   const minMidiChannel = 175;
   let channel = document.querySelector("#channel").value | 0;
-  return decToHex(minMidiChannel + channel);
+  return decToHex(minMidiChannel + getChannel());
+}
+
+function setBank(bank) {
+  if (bank >= 1 && bank <= 4) {
+    document.querySelector("#bank").value = bank;
+    return true;
+  }
+  
+  return false;
 }
 
 function getBank() {
@@ -106,12 +129,29 @@ function getBankOffset() {
   return (getBank() - 1) * 16;
 }
 
-function getControllers() {
-  const scheme = controllers.map((controller, i) => {
-    if (!controller.touched) return false;
-    return `${getChannel()} ${(i + getBankOffset())} ${controller.value}`
-  }).filter(c => c).join(' ');
+function getRealControllerIndex(controllerIndex) {
+  return controllerIndex + getBankOffset();
+}
+    
+function getMidiMessage(controllerIndex, value) {
+  return `${getChannelMidi()} ${decToHex(getRealControllerIndex(controllerIndex))} ${decToHex(value)}`;
+}
 
+function getColorSchemeMidi() {
+  return controllers.map((controller, controllerIndex) => {
+    if (!controller.touched) return false;
+    return getMidiMessage(controllerIndex, controller.value);
+  }).filter(c => c).join(' ');
+}
+
+function copyColorScheme() {
+  const scheme = getColorSchemeMidi();
+  debugger
+  if (!scheme) {
+    window.alert("Nothing to copy, make some changes!");
+    return;
+  }
+                 
   (async () => {
     const result = await navigator.permissions.query({
       name: 'clipboard-write'
@@ -129,8 +169,16 @@ function getControllers() {
     }
   })();
 }
+    
+function reset() {
+  controllers = getFreshState();
+  controllers.forEach((controller, controllerIndex) => {
+    getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getChannel()); 
+  });
+}
 
-document.querySelector('#btn').onclick = getControllers;  
+document.querySelector('#copy').onclick = copyColorScheme;
+document.querySelector('#reset').onclick = reset;
   </script>
 </body>
 </html>
