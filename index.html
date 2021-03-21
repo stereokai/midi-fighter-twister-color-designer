@@ -1,1 +1,95 @@
+<!doctype html>
 
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+
+  <title>The HTML5 Herald</title>
+  <meta name="description" content="Color designer for MIDI Fighter Twister">
+  <meta name="author" content="Stereokai">
+  <script src="https://cdn.jsdelivr.net/npm/webmidi@2.5.2/webmidi.min.js"></script>
+</head>
+
+<body>
+  <button id="btn">done</button>
+  <br>
+  <label>channel
+    <input id="channel" type="number" min="1" max="16" value="2">
+  </label>
+  <br>
+  <label>bank
+    <input id="bank" type="number" min="1" max="4" value="1">
+  </label>
+  
+  <script>
+const controllers = Array.from({
+  length: 16
+}, () => ({
+  touched: false,
+  value: undefined
+}));
+
+WebMidi.enable(function(err) {
+
+  if (err) {
+    console.log("WebMidi could not be enabled.", err);
+  } else {
+
+    console.log("WebMidi enabled!");
+
+    const output = WebMidi.getOutputByName("Midi Fighter Twister");
+    const input = WebMidi.getInputByName("Midi Fighter Twister");
+    // console.log(output.sendControlChange.toString())
+    input.addListener('controlchange', "all",
+      function(e) {
+        const controller = e.controller.number;
+        const value = e.value;
+        output.sendControlChange(controller, value, 2);
+        controllers[controller % 16].value = value;
+        controllers[controller % 16].touched = true;
+      }
+    );
+  }
+
+  console.log(WebMidi)
+
+});
+
+function decToHex(number) {
+  return number.toString(16).toUpperCase().padStart(2, '0');
+}
+
+function getChannel() {
+  const minMidiChannel = 175;
+  let channel = document.querySelector("#channel").value | 0;
+  return decToHex(minMidiChannel + channel);
+}
+
+function getBank() {
+  return document.querySelector("#bank").value | 0;
+}
+
+function getBankOffset() {
+  return (getBank() - 1) * 16;
+}
+
+function getControllers() {
+  const result = controllers.map((controller, i) => {
+    if (!controller.touched) return false;
+    return `${getChannel()} ${(i + getBankOffset())} ${controller.value}`
+  }).filter(c => c).join(' ');
+  console.log(result)
+  navigator.permissions.query({name: "clipboard-write"}).then(result => {
+    if (result.state == "granted" || result.state == "prompt") {
+      navigator.clipboard.writeText(result);
+        window.alert('Result copied to clipboard!');
+    } else {
+      console.log('no permission to copy')
+    }
+  }; 
+}
+
+document.querySelector('#btn').onclick = getControllers;  
+  </script>
+</body>
+</html>
