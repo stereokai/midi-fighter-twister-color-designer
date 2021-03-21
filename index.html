@@ -76,14 +76,22 @@ function getControllers() {
     return `${getChannel()} ${(i + getBankOffset())} ${controller.value}`
   }).filter(c => c).join(' ');
 
-  navigator.permissions.query({name: "clipboard-write"}).then(result => {
-    if (result.state == "granted" || result.state == "prompt") {
-      navigator.clipboard.writeText(scheme);
-      window.alert('Result copied to clipboard!');
+  (async () => {
+    const result = await navigator.permissions.query({
+      name: 'clipboard-write'
+    });
+    
+    if (result.state == 'granted' || result.state == 'prompt') {
+      try {
+        await navigator.clipboard.writeText(scheme);
+        window.alert('Colors MIDI copied to clipboard!');
+      } catch (err) {
+        console.error('Error: Failed to copy, ', err);
+      }
     } else {
       console.log('Error: no permission to copy');
     }
-  }); 
+  })();
 }
 
 document.querySelector('#btn').onclick = getControllers;  
