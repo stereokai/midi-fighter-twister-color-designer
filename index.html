@@ -58,9 +58,17 @@
   <script>
 const MFT = "Midi Fighter Twister";
 const statusIndicator = document.querySelector('#status');
+const relativeUp = 65;
+const relativeDown = 63;
+const relativeFactor = 64;
 let controllers = getFreshState();
 let isConnected = false;
-    
+let absoluteRelativeScanCycle = 0; // 0-1 = scanning for relative, 2 = relative, 3 = absolute
+let lastInput = {
+  controller: 0,
+  value: 0
+};
+
 WebMidi.enable(err => {
   if (err) {
     console.log("Error: WebMidi could not be enabled.", err);
@@ -69,24 +77,60 @@ WebMidi.enable(err => {
       if (e && e.port && e.port.name === MFT) {
         if (getInput()) {
           if (isConnected) { return; }
-          
+
           setConnectionStatus(true);
           getInput().addListener('controlchange', 'all', e => {
             if (!isConnected) { return; }
             if (e.channel == getSystemChannel()) { return; }
-            
-            // Change LED color in MFT
+
             const controller = e.controller.number;
-            const value = e.value;
+            let value = e.value;
+
+            // Identify in real-time if knob is absolute or relative (ENC 3FH/41H):
+
+            // Reset scan cycle if user has changed a knob
+            if (controller != lastInput.controller) {
+              absoluteRelativeScanCycle = 0;
+            }
+
+            // Logic for relative knobs
+            if (isRelativeKnobValue(value) && absoluteRelativeScanCycle < 3) {
+              // Count 3 consecutive "up" or "down" inputs
+              if (absoluteRelativeScanCycle < 2) {
+                lastInput.controller = controller;
+                lastInput.value = value;
+                absoluteRelativeScanCycle++;
+                return;
+              }
+
+              // Reset cycle if the direction changed at the last moment
+              if (lastInput.value != value) {
+                absoluteRelativeScanCycle = 0;
+                return;
+              }
+
+              // After 3 consecutive inputs, we know for sure it's relative
+              const lastValue = getController(controller).value;
+
+              // Transform relative value to absolute value
+              value = Math.min(Math.max(lastValue + (value - relativeFactor), 0), 127);
+            } else {
+              // This knob is absolute
+              absoluteRelativeScanCycle = 3;
+              lastInput.controller = controller;
+              lastInput.value = value;
+            }
+
+            // Change LED color in MFT
             getOutput().sendControlChange(controller, value, getColorChannel());
-             
+
             // Store actual bank automatically
             const currentBank = (controller / 16 | 0) + 1; // Which bank are we on?
             setBank(currentBank);
-            
+
             // Store controller state
-            controllers[controller % 16].value = value;
-            controllers[controller % 16].touched = true;
+            getController(controller).value = value;
+            getController(controller).touched = true;
           });
         }
       }
@@ -99,7 +143,7 @@ WebMidi.enable(err => {
     });
   }
 });
-    
+
 function getFreshState() {
   return Array.from({
     length: 16
@@ -108,7 +152,7 @@ function getFreshState() {
     value: 0
   }));
 }
-    
+
 function getInput() {
   return WebMidi.getInputByName(MFT);
 }
@@ -116,7 +160,15 @@ function getInput() {
 function getOutput() {
   return WebMidi.getOutputByName(MFT);
 }
-    
+
+function isRelativeKnobValue(value) {
+  // My MFT sometimes sends 62 and 66 instead of 63 and 65 on ENC 3FH/41H mode
+  return value == relativeUp ||
+         value == relativeDown ||
+         value == relativeUp + 1 ||
+         value == relativeDown - 1;
+}
+
 function decToHex(number) {
   return number.toString(16).toUpperCase().padStart(2, '0');
 }
@@ -140,10 +192,14 @@ function getColorChannel() {
 function getSystemChannel() {
   return document.querySelector('#systemChannel').value | 0
 }
-    
+
 function getChannelMidi(midiChannelIndex) {
   const minMidiChannel = 175;
   return decToHex(minMidiChannel + midiChannelIndex);
+}
+
+function getController(controller) {
+  return controllers[controller % 16];
 }
 
 function setBank(bank) {
@@ -151,7 +207,7 @@ function setBank(bank) {
     document.querySelector("#bank").value = bank;
     return true;
   }
-  
+
   return false;
 }
 
@@ -166,7 +222,7 @@ function getBankOffset() {
 function getRealControllerIndex(controllerIndex) {
   return controllerIndex + getBankOffset();
 }
-    
+
 function getMidiMessage(controllerIndex, value) {
   return `${getChannelMidi(getColorChannel())} ${decToHex(getRealControllerIndex(controllerIndex))} ${decToHex(value)}`;
 }
@@ -185,12 +241,12 @@ function copyColorScheme() {
     window.alert("Nothing to copy, make some changes!");
     return;
   }
-                 
+
   (async () => {
     const result = await navigator.permissions.query({
       name: 'clipboard-write'
     });
-    
+
     if (result.state == 'granted' || result.state == 'prompt') {
       try {
         await navigator.clipboard.writeText(scheme);
@@ -203,14 +259,14 @@ function copyColorScheme() {
     }
   })();
 }
-    
+
 function reset() {
   controllers = getFreshState();
   controllers.forEach((controller, controllerIndex) => {
     getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getColorChannel()); 
   });
 }
-    
+
 function changeBank(e) {
   const bank = (e.target.value | 0) - 1;
   getOutput().sendControlChange(bank, 127, getSystemChannel()); 
