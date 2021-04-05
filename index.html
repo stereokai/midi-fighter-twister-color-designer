@@ -129,7 +129,14 @@ WebMidi.enable(err => {
               e.velocity
             );
 
-            getOutput().sendControlChange(knob, Math.round(value), getColorChannel());
+            // Change LED color in MFT
+            setKnobColor(knob, value);
+
+            // Infer and store actual bank automatically
+            inferAndSetBank(knob);
+
+            // Store knob state
+            storeKnob(knob, value);
           });
 
           getInput().addListener('controlchange', 'all', e => {
@@ -184,15 +191,13 @@ WebMidi.enable(err => {
             }
 
             // Change LED color in MFT
-            getOutput().sendControlChange(knob, value, getColorChannel());
+            setKnobColor(knob, value);
 
             // Infer and store actual bank automatically
-            const currentBank = (knob / MFT.KNOBS | 0) + 1; // Which bank are we on?
-            setBank(currentBank);
+            inferAndSetBank(knob);
 
             // Store knob state
-            getKnob(knob).value = value;
-            getKnob(knob).touched = true;
+            storeKnob(knob, value);
           });
         }
       }
@@ -254,6 +259,20 @@ function getChannelMidi(midiChannelIndex) {
 
 function getKnob(knob) {
   return mft.knobs[knob % MFT.KNOBS];
+}
+
+function storeKnob (knob, value) {
+  getKnob(knob).value = value;
+  getKnob(knob).touched = true;
+}
+
+function setKnobColor(knob, value) {
+  getOutput().sendControlChange(knob, value, getColorChannel());
+}
+
+function inferAndSetBank(knob) {
+  const currentBank = (knob / MFT.KNOBS | 0) + 1; // Which bank are we on?
+  setBank(currentBank);
 }
 
 function setBank(bank) {
