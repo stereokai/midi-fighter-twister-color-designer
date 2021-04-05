@@ -78,6 +78,11 @@ class MFT {
   static RELATIVE = 2;
   static ABSOLUTE = 3;
   static FALSE_RELATIVE = 4;
+  // Events
+  static CONNECTED = 'connected';
+  static DISCONNECTED = 'disconnected';
+  static CONTROL_CHANGE = 'controlchange';
+  static NOTE_ON = 'noteon';
 
   constructor() {
     this.reset();
@@ -111,13 +116,13 @@ WebMidi.enable(err => {
   if (err) {
     console.log("Error: WebMidi could not be enabled.", err);
   } else {
-    WebMidi.addListener('connected', e => {
+    WebMidi.addListener(MFT.CONNECTED, e => {
       if (e && e.port && e.port.name === MFT.DEVICE_NAME) {
         if (getInput()) {
           if (isConnected) { return; }
           setConnectionStatus(true);
 
-          getInput().addListener('noteon', 'all', e => {
+          getInput().addListener(MFT.NOTE_ON, 'all', e => {
             if (!isConnected) { return; }
 
             const knob = e.data[1];
@@ -140,7 +145,7 @@ WebMidi.enable(err => {
             storeKnob(knob, value);
           });
 
-          getInput().addListener('controlchange', 'all', e => {
+          getInput().addListener(MFT.CONTROL_CHANGE, 'all', e => {
             if (!isConnected) { return; }
             if (e.channel == getSystemChannel()) { return; }
 
@@ -204,7 +209,7 @@ WebMidi.enable(err => {
       }
     });
 
-    WebMidi.addListener('disconnected', e => {
+    WebMidi.addListener(MFT.DISCONNECTED, e => {
       if (e && e.port && e.port.name === MFT.DEVICE_NAME) {
         setConnectionStatus(false);
       }
@@ -225,7 +230,7 @@ function isRelativeKnobValue(value) {
 }
 
 function isPotentiallyRelative(value) {
-  // This are not actual min and max values but good enough for this purpose
+  // These are not actual min and max values but good enough for this purpose
   return value >= MFT.MIN_VELOCITY_SENSITIVE_KNOB_VALUE && value <= MFT.MAX_VELOCITY_SENSITIVE_KNOB_VALUE;
 }
 
