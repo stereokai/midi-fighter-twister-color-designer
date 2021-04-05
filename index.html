@@ -63,10 +63,10 @@ const relativeDown = 63;
 const relativeFactor = 64;
 let controllers = getFreshState();
 let isConnected = false;
-let absoluteRelativeScanCycle = 0; // 0-1 = scanning for relative, 2 = relative, 3 = absolute
+let scanCycle = 0; // 0-1 = scanning for relative, 2 = relative, 3 = absolute, 4 = absolute detected as relative (force reset)
+let outOfRangeInput = 0;
 let lastInput = {
-  controller: 0,
-  value: 0
+  controller: 0
 };
 
 WebMidi.enable(err => {
@@ -77,8 +77,8 @@ WebMidi.enable(err => {
       if (e && e.port && e.port.name === MFT) {
         if (getInput()) {
           if (isConnected) { return; }
-
           setConnectionStatus(true);
+
           getInput().addListener('controlchange', 'all', e => {
             if (!isConnected) { return; }
             if (e.channel == getSystemChannel()) { return; }
@@ -90,35 +90,44 @@ WebMidi.enable(err => {
 
             // Reset scan cycle if user has changed a knob
             if (controller != lastInput.controller) {
-              absoluteRelativeScanCycle = 0;
+              scanCycle = 0;
+            }
+
+            // Prevent out of range input & absolute knobs identified as relative
+            if (!isVelocitySensitiveKnobValue(value)) {
+              if (scanCycle >= 1 && scanCycle <= 2) {
+                outOfRangeInput++;
+
+                if (outOfRangeInput == 3) {
+                  outOfRangeInput = 0;
+                  scanCycle = 4;
+                }
+
+                return;
+              }
             }
 
             // Logic for relative knobs
-            if (isRelativeKnobValue(value) && absoluteRelativeScanCycle < 3) {
+            if (isVelocitySensitiveKnobValue(value) && scanCycle < 3) {
+              // Reduce out of range count when we get an in range input
+              !!outOfRangeInput && outOfRangeInput--;
+
               // Count 3 consecutive "up" or "down" inputs
-              if (absoluteRelativeScanCycle < 2) {
+              if (scanCycle < 2) {
                 lastInput.controller = controller;
-                lastInput.value = value;
-                absoluteRelativeScanCycle++;
+                scanCycle++;
                 return;
               }
 
-              // Reset cycle if the direction changed at the last moment
-              if (lastInput.value != value) {
-                absoluteRelativeScanCycle = 0;
-                return;
-              }
-
-              // After 3 consecutive inputs, we know for sure it's relative
+              // After 3 consecutive inputs, it's good enough to infer relative
               const lastValue = getController(controller).value;
 
               // Transform relative value to absolute value
               value = Math.min(Math.max(lastValue + (value - relativeFactor), 0), 127);
             } else {
               // This knob is absolute
-              absoluteRelativeScanCycle = 3;
+              scanCycle = 3;
               lastInput.controller = controller;
-              lastInput.value = value;
             }
 
             // Change LED color in MFT
@@ -162,11 +171,11 @@ function getOutput() {
 }
 
 function isRelativeKnobValue(value) {
-  // My MFT sometimes sends 62 and 66 instead of 63 and 65 on ENC 3FH/41H mode
-  return value == relativeUp ||
-         value == relativeDown ||
-         value == relativeUp + 1 ||
-         value == relativeDown - 1;
+  return value >= 61 && value <= 67;
+}
+
+function isVelocitySensitiveKnobValue(value) {
+  return value >= 47 && value <= 81;
 }
 
 function decToHex(number) {
@@ -265,6 +274,11 @@ function reset() {
   controllers.forEach((controller, controllerIndex) => {
     getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getColorChannel()); 
   });
+
+  scanCycle = 0;
+  lastInput = {
+    controller: 0
+  };
 }
 
 function changeBank(e) {
@@ -276,6 +290,7 @@ document.querySelector('#copy').onclick = copyColorScheme;
 document.querySelector('#reset').onclick = reset;
 document.querySelector('#bank').onclick = changeBank;
 document.querySelector('#bank').onblur = changeBank;
+document.querySelector('#bank').onclick = changeBank;
   </script>
 </body>
 </html>
