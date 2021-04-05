@@ -58,8 +58,10 @@
   <script>
 const MFT = "Midi Fighter Twister";
 const statusIndicator = document.querySelector('#status');
-const relativeUp = 65;
-const relativeDown = 63;
+const minColorValue = 0;
+const maxColorValue = 127;
+const minVelocityValue = 0.007874015748031496;
+const maxVelocityValue = 1;
 const relativeFactor = 64;
 let controllers = getFreshState();
 let isConnected = false;
@@ -68,6 +70,12 @@ let outOfRangeInput = 0;
 let lastInput = {
   controller: 0
 };
+
+// Linear interpolations
+const lerp = (x, y, a) => x * (1 - a) + y * a; // pass range and fraction and get relative number from range
+const clamp = (a, min = 0, max = 1) => Math.min(max, Math.max(min, a)); // limit number within range
+const invlerp = (x, y, a) => clamp((a - x) / (y - x)); // inverse of lerp (pass number and get fraction) from range
+const range = (x1, y1, x2, y2, a) => lerp(x2, y2, invlerp(x1, y1, a)); // interpolate a number between 2 ranges
 
 WebMidi.enable(err => {
   if (err) {
@@ -78,6 +86,14 @@ WebMidi.enable(err => {
         if (getInput()) {
           if (isConnected) { return; }
           setConnectionStatus(true);
+
+          getInput().addListener('noteon', 'all', e => {
+            if (!isConnected) { return; }
+
+            const controller = e.data[1];
+            const value = Math.round(range(minVelocityValue, maxVelocityValue, minColorValue, maxColorValue, e.velocity))
+            getOutput().sendControlChange(controller, value, getColorChannel());
+          });
 
           getInput().addListener('controlchange', 'all', e => {
             if (!isConnected) { return; }
@@ -123,7 +139,7 @@ WebMidi.enable(err => {
               const lastValue = getController(controller).value;
 
               // Transform relative value to absolute value
-              value = Math.min(Math.max(lastValue + (value - relativeFactor), 0), 127);
+              value = clamp(lastValue + (value - relativeFactor), minColorValue, maxColorValue);
             } else {
               // This knob is absolute
               scanCycle = 3;
