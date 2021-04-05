@@ -13,7 +13,7 @@
     a[target="_blank"]::after {
       content: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAQElEQVR42qXKwQkAIAxDUUdxtO6/RBQkQZvSi8I/pL4BoGw/XPkh4XigPmsUgh0626AjRsgxHTkUThsG2T/sIlzdTsp52kSS1wAAAABJRU5ErkJggg==);
       margin: 0 3px;
-    }  
+    }
   </style>
 </head>
 
@@ -25,7 +25,7 @@
       <p>
         <label>Bank
           <input id="bank" type="number" min="1" max="4" value="1">
-        </label>      
+        </label>
         <button id="copy" style="border: 2px solid; border-radius: 3px">Copy colors to clipboard</button>
         <button id="reset">Reset</button>
       </p>
@@ -45,7 +45,7 @@
         </p>
       </fieldset>
     </fieldset>
-    
+
     <div style="position: absolute; padding: 10px;">
       <h3>What is this?</h3>
       This is a fun tool for designing color layouts for MIDI Fighter Twister.
@@ -56,20 +56,50 @@
     </div>
   </div>
   <script>
-const MFT = "Midi Fighter Twister";
-const statusIndicator = document.querySelector('#status');
-const minColorValue = 0;
-const maxColorValue = 127;
-const minVelocityValue = 0.007874015748031496;
-const maxVelocityValue = 1;
-const relativeFactor = 64;
-let controllers = getFreshState();
 let isConnected = false;
-let scanCycle = 0; // 0-1 = scanning for relative, 2 = relative, 3 = absolute, 4 = absolute detected as relative (force reset)
-let outOfRangeInput = 0;
-let lastInput = {
-  controller: 0
-};
+const statusIndicator = document.querySelector('#status');
+
+class MFT {
+  static DEVICE_NAME = "Midi Fighter Twister";
+  static BANKS = 4;
+  static KNOBS = 16;
+  static CHANGE_BANK = 127;
+  static MIN_COLOR_VALUE = 0;
+  static MAX_COLOR_VALUE = 127;
+  static MIN_NOTE_VELOCITY = 0.007874015748031496;
+  static MAX_NOTE_VELOCITY = 1;
+  static MIN_VELOCITY_SENSITIVE_KNOB_VALUE = 47;
+  static MAX_VELOCITY_SENSITIVE_KNOB_VALUE = 81;
+  static RELATIVE_FACTOR = 64;
+  static FALSE_RELATIVE_DETECTION_THRESHOLD = 3;
+  // Statuses
+  static STANDBY = 0;
+  static LISTENING_FOR_RELATIVE = 1;
+  static RELATIVE = 2;
+  static ABSOLUTE = 3;
+  static FALSE_RELATIVE = 4;
+
+  constructor() {
+    this.reset();
+  }
+
+  reset() {
+    this.knobs = Array.from({
+      length: MFT.KNOBS
+    }, () => ({
+      touched: false,
+      value: 0
+    }));
+    this.status = MFT.STANDBY;
+    this.currentKnob = 0;
+    this.outOfRangeInput = 0;
+    this.lastInput = {
+      knob: 0
+    }
+  }
+}
+
+const mft = new MFT();
 
 // Linear interpolations
 const lerp = (x, y, a) => x * (1 - a) + y * a; // pass range and fraction and get relative number from range
@@ -82,7 +112,7 @@ WebMidi.enable(err => {
     console.log("Error: WebMidi could not be enabled.", err);
   } else {
     WebMidi.addListener('connected', e => {
-      if (e && e.port && e.port.name === MFT) {
+      if (e && e.port && e.port.name === MFT.DEVICE_NAME) {
         if (getInput()) {
           if (isConnected) { return; }
           setConnectionStatus(true);
@@ -90,108 +120,107 @@ WebMidi.enable(err => {
           getInput().addListener('noteon', 'all', e => {
             if (!isConnected) { return; }
 
-            const controller = e.data[1];
-            const value = Math.round(range(minVelocityValue, maxVelocityValue, minColorValue, maxColorValue, e.velocity))
-            getOutput().sendControlChange(controller, value, getColorChannel());
+            const knob = e.data[1];
+            const value = range(
+              MFT.MIN_NOTE_VELOCITY,
+              MFT.MAX_NOTE_VELOCITY,
+              MFT.MIN_COLOR_VALUE,
+              MFT.MAX_COLOR_VALUE,
+              e.velocity
+            );
+
+            getOutput().sendControlChange(knob, Math.round(value), getColorChannel());
           });
 
           getInput().addListener('controlchange', 'all', e => {
             if (!isConnected) { return; }
             if (e.channel == getSystemChannel()) { return; }
 
-            const controller = e.controller.number;
+            const knob = e.controller.number;
             let value = e.value;
 
             // Identify in real-time if knob is absolute or relative (ENC 3FH/41H):
 
             // Reset scan cycle if user has changed a knob
-            if (controller != lastInput.controller) {
-              scanCycle = 0;
+            if (knob != mft.lastInput.knob) {
+              mft.status = MFT.STANDBY;
             }
 
             // Prevent out of range input & absolute knobs identified as relative
-            if (!isVelocitySensitiveKnobValue(value)) {
-              if (scanCycle >= 1 && scanCycle <= 2) {
-                outOfRangeInput++;
+            if (!isPotentiallyRelative(value)) {
+              if (mft.status == MFT.LISTENING_FOR_RELATIVE || mft.status == MFT.RELATIVE) {
+                mft.outOfRangeInput++;
 
-                if (outOfRangeInput == 3) {
-                  outOfRangeInput = 0;
-                  scanCycle = 4;
+                if (mft.outOfRangeInput == MFT.FALSE_RELATIVE_DETECTION_THRESHOLD) {
+                  mft.outOfRangeInput = 0;
+                  mft.status = MFT.FALSE_RELATIVE;
                 }
 
                 return;
               }
             }
 
-            // Logic for relative knobs
-            if (isVelocitySensitiveKnobValue(value) && scanCycle < 3) {
+            // Identify relative knobs
+            if (isPotentiallyRelative(value) && mft.status < MFT.ABSOLUTE) {
               // Reduce out of range count when we get an in range input
-              !!outOfRangeInput && outOfRangeInput--;
+              !!mft.outOfRangeInput && mft.outOfRangeInput--;
 
               // Count 3 consecutive "up" or "down" inputs
-              if (scanCycle < 2) {
-                lastInput.controller = controller;
-                scanCycle++;
+              if (mft.status < MFT.RELATIVE) {
+                mft.lastInput.knob = knob;
+                mft.status++;
                 return;
               }
 
               // After 3 consecutive inputs, it's good enough to infer relative
-              const lastValue = getController(controller).value;
+              const lastValue = getKnob(knob).value;
 
               // Transform relative value to absolute value
-              value = clamp(lastValue + (value - relativeFactor), minColorValue, maxColorValue);
+              value = clamp(lastValue + (value - MFT.RELATIVE_FACTOR), MFT.MIN_COLOR_VALUE, MFT.MAX_COLOR_VALUE);
             } else {
               // This knob is absolute
-              scanCycle = 3;
-              lastInput.controller = controller;
+              mft.status = MFT.ABSOLUTE;
+              mft.lastInput.knob = knob;
             }
 
             // Change LED color in MFT
-            getOutput().sendControlChange(controller, value, getColorChannel());
+            getOutput().sendControlChange(knob, value, getColorChannel());
 
-            // Store actual bank automatically
-            const currentBank = (controller / 16 | 0) + 1; // Which bank are we on?
+            // Infer and store actual bank automatically
+            const currentBank = (knob / MFT.KNOBS | 0) + 1; // Which bank are we on?
             setBank(currentBank);
 
-            // Store controller state
-            getController(controller).value = value;
-            getController(controller).touched = true;
+            // Store knob state
+            getKnob(knob).value = value;
+            getKnob(knob).touched = true;
           });
         }
       }
     });
 
     WebMidi.addListener('disconnected', e => {
-      if (e && e.port && e.port.name === MFT) {
+      if (e && e.port && e.port.name === MFT.DEVICE_NAME) {
         setConnectionStatus(false);
       }
     });
   }
 });
 
-function getFreshState() {
-  return Array.from({
-    length: 16
-  }, () => ({
-    touched: false,
-    value: 0
-  }));
-}
-
 function getInput() {
-  return WebMidi.getInputByName(MFT);
+  return WebMidi.getInputByName(MFT.DEVICE_NAME);
 }
 
 function getOutput() {
-  return WebMidi.getOutputByName(MFT);
+  return WebMidi.getOutputByName(MFT.DEVICE_NAME);
 }
 
 function isRelativeKnobValue(value) {
   return value >= 61 && value <= 67;
 }
 
-function isVelocitySensitiveKnobValue(value) {
-  return value >= 47 && value <= 81;
+function isPotentiallyRelative(value) {
+  // This are not actual min and max values but good enough for this purpose
+  return value >= MFT.MIN_VELOCITY_SENSITIVE_KNOB_VALUE && value <= MFT.MAX_VELOCITY_SENSITIVE_KNOB_VALUE;
 }
 
 function decToHex(number) {
@@ -223,12 +252,12 @@ function getChannelMidi(midiChannelIndex) {
   return decToHex(minMidiChannel + midiChannelIndex);
 }
 
-function getController(controller) {
-  return controllers[controller % 16];
+function getKnob(knob) {
+  return mft.knobs[knob % MFT.KNOBS];
 }
 
 function setBank(bank) {
-  if (bank >= 1 && bank <= 4) {
+  if (bank >= 1 && bank <= MFT.BANKS) {
     document.querySelector("#bank").value = bank;
     return true;
   }
@@ -241,21 +270,21 @@ function getBank() {
 }
 
 function getBankOffset() {
-  return (getBank() - 1) * 16;
+  return (getBank() - 1) * MFT.KNOBS;
 }
 
-function getRealControllerIndex(controllerIndex) {
-  return controllerIndex + getBankOffset();
+function getRealKnobIndex(knobIndex) {
+  return knobIndex + getBankOffset();
 }
 
-function getMidiMessage(controllerIndex, value) {
-  return `${getChannelMidi(getColorChannel())} ${decToHex(getRealControllerIndex(controllerIndex))} ${decToHex(value)}`;
+function getMidiMessage(knobIndex, value) {
+  return `${getChannelMidi(getColorChannel())} ${decToHex(getRealKnobIndex(knobIndex))} ${decToHex(value)}`;
 }
 
 function getColorSchemeMidi() {
-  return controllers.map((controller, controllerIndex) => {
-    if (!controller.touched) return false;
-    return getMidiMessage(controllerIndex, controller.value);
+  return mft.knobs.map((knob, knobIndex) => {
+    if (!knob.touched) return false;
+    return getMidiMessage(knobIndex, knob.value);
   }).filter(c => c).join(' ');
 }
 
@@ -286,20 +315,16 @@ function copyColorScheme() {
 }
 
 function reset() {
-  controllers = getFreshState();
-  controllers.forEach((controller, controllerIndex) => {
-    getOutput().sendControlChange(getRealControllerIndex(controllerIndex), 0, getColorChannel()); 
+  mft.reset();
+  mft.knobs.forEach((knob, knobIndex) => {
+    getOutput().sendControlChange(getRealKnobIndex(knobIndex), 0, getColorChannel());
   });
-
-  scanCycle = 0;
-  lastInput = {
-    controller: 0
-  };
 }
 
 function changeBank(e) {
   const bank = (e.target.value | 0) - 1;
-  getOutput().sendControlChange(bank, 127, getSystemChannel()); 
+  getOutput().sendControlChange(bank, MFT.CHANGE_BANK, getSystemChannel());
+  mft.reset();
 }
 
 document.querySelector('#copy').onclick = copyColorScheme;
