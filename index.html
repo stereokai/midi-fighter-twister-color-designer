@@ -121,19 +121,20 @@ WebMidi.enable(err => {
             if (!isConnected) { return; }
 
             const knob = e.data[1];
-            const value = range(
+            let value = range(
               MFT.MIN_NOTE_VELOCITY,
               MFT.MAX_NOTE_VELOCITY,
               MFT.MIN_COLOR_VALUE,
               MFT.MAX_COLOR_VALUE,
               e.velocity
             );
+            value = Math.round(value);
 
             // Change LED color in MFT
             setKnobColor(knob, value);
 
-            // Infer and store actual bank automatically
-            inferAndSetBank(knob);
+            // Infer and update actual bank automatically
+            inferAndUpdateBank(knob);
 
             // Store knob state
             storeKnob(knob, value);
@@ -145,6 +146,9 @@ WebMidi.enable(err => {
 
             const knob = e.controller.number;
             let value = e.value;
+
+            // Infer and update actual bank automatically
+            inferAndUpdateBank(knob);
 
             // Identify in real-time if knob is absolute or relative (ENC 3FH/41H):
 
@@ -192,9 +196,6 @@ WebMidi.enable(err => {
 
             // Change LED color in MFT
             setKnobColor(knob, value);
-
-            // Infer and store actual bank automatically
-            inferAndSetBank(knob);
 
             // Store knob state
             storeKnob(knob, value);
@@ -270,7 +271,7 @@ function setKnobColor(knob, value) {
   getOutput().sendControlChange(knob, value, getColorChannel());
 }
 
-function inferAndSetBank(knob) {
+function inferAndUpdateBank(knob) {
   const currentBank = (knob / MFT.KNOBS | 0) + 1; // Which bank are we on?
   setBank(currentBank);
 }
