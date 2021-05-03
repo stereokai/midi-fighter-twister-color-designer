@@ -14,13 +14,65 @@
       content: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAQElEQVR42qXKwQkAIAxDUUdxtO6/RBQkQZvSi8I/pL4BoGw/XPkh4XigPmsUgh0626AjRsgxHTkUThsG2T/sIlzdTsp52kSS1wAAAABJRU5ErkJggg==);
       margin: 0 3px;
     }
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 4ex;
+  height: 2ex;
+  border: 1px solid grey;
+}
+
+.switch:focus {
+  outline: 5px auto Highlight;
+  outline: 5px auto -webkit-focus-ring-color;
+}
+
+input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 1.7ex;
+  width: 1.7ex;
+  left: 0.1ex;
+  bottom: 0.1ex;
+  background-color: firebrick;
+}
+
+input:checked + .switch > .slider:before {
+  background-color: limegreen;
+}
+
+input:focus + .switch > .slider:before {
+  outline: 5px auto Highlight;
+  outline: 5px auto -webkit-focus-ring-color;
+}
+
+input:checked + .switch > .slider:before {
+  transform: translateX(2.1ex);
+}
   </style>
 </head>
 
 <body>
   <div style="display: inline-block; position: relative;">
-    <fieldset style="display: inline-block;">
+    <fieldset style="display: inline-block; position: relative">
       <legend>MIDI Fighter Twister Color Designer</legend>
+      <legend style="position: absolute; bottom: -1.3ex; background: white;">Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></legend>
 
       <p>
         <label>Bank
@@ -29,9 +81,15 @@
         <button id="copy" style="border: 2px solid; border-radius: 3px">Copy colors to clipboard</button>
         <button id="reset">Reset</button>
       </p>
-
-      <div>Connection status: <span style="font-weight: bold; color: firebrick" id="status">Disconnected</span></div>
-      <br>
+      <hr>
+        <div>
+          <input id="realearnWrap" type="checkbox">
+          <label for="realearnWrap" class="switch">
+            <span class="slider"></span>
+          </label>
+          <span style="vertical-align: top">Wrap with ReaLearn <code><b>on_activate</b></code> command</span>
+        </div>
+      <hr>
       <fieldset style="display: inline-block;">
         <legend><b>Advanced</b> - See Twister utility</legend>
 
@@ -44,6 +102,7 @@
           <label for="systemChannel>">System MIDI Channel (default is 4)</label>
         </p>
       </fieldset>
+      <br>&nbsp;
     </fieldset>
 
     <div style="position: absolute; padding: 10px;">
@@ -258,6 +317,10 @@ function getSystemChannel() {
   return document.querySelector('#systemChannel').value | 0
 }
 
+function shouldReaLearnWrap() {
+  return !!document.querySelector('#realearnWrap').checked;
+}
+
 function getChannelMidi(midiChannelIndex) {
   const minMidiChannel = 175;
   return decToHex(minMidiChannel + midiChannelIndex);
@@ -306,6 +369,12 @@ function getMidiMessage(knobIndex, value) {
   return `${getChannelMidi(getColorChannel())} ${decToHex(getRealKnobIndex(knobIndex))} ${decToHex(value)}`;
 }
 
+function reaLearnWrap(string) {
+  return `on_activate:
+  send_midi_feedback:
+    - raw: ${string}`;
+}
+
 function getColorSchemeMidi() {
   return mft.knobs.map((knob, knobIndex) => {
     if (!knob.touched) return false;
@@ -314,7 +383,11 @@ function getColorSchemeMidi() {
 }
 
 function copyColorScheme() {
-  const scheme = getColorSchemeMidi();
+  let scheme = getColorSchemeMidi();
+
+  if (shouldReaLearnWrap()) {
+    scheme = reaLearnWrap(scheme);
+  }
 
   if (!scheme) {
     window.alert("Nothing to copy, make some changes!");
@@ -352,11 +425,16 @@ function changeBank(e) {
   mft.reset();
 }
 
+function toggleReaLearnWrap(e) {
+  e && e.target.blur();
+}
+
 document.querySelector('#copy').onclick = copyColorScheme;
 document.querySelector('#reset').onclick = reset;
 document.querySelector('#bank').onclick = changeBank;
 document.querySelector('#bank').onblur = changeBank;
 document.querySelector('#bank').onclick = changeBank;
+document.querySelector('#realearnWrap').onclick = toggleReaLearnWrap;
   </script>
 </body>
 </html>
